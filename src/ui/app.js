@@ -1041,6 +1041,16 @@ export function mountApp(root, deps) {
     syncShell();
   }
 
+  // npm run serve has a relay for this machine's own pages (serve.mjs); the deployed site doesn't, so the probe fails there
+  let localRelayP = null;
+  function localRelay() {
+    if (!localRelayP) {
+      const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+      localRelayP = local ? fetch('/__relay?probe=1', { method: 'HEAD' }).then((r) => r.headers.get('x-datadrop-relay') === 'local').catch(() => false) : Promise.resolve(false);
+    }
+    return localRelayP;
+  }
+
   async function loadUrl(url) {
     setView('charts'); // loading progress and the first charts show there
     abortPendingCharts();
@@ -1079,10 +1089,12 @@ export function mountApp(root, deps) {
       };
       try { await go(null); } catch (e) {
         // the server blocks browsers: if the user set up a relay of their own, read this one link through it
-        const proxy = parseProxy(state.settings.corsProxy).template;
+        let proxy = parseProxy(state.settings.corsProxy).template;
+        let local = false;
+        if (e?.blocked && !proxy && await localRelay()) { proxy = `${location.origin}/__relay?url={url}`; local = true; }
         if (!(e?.blocked && proxy) || seq !== state.loadSeq) throw e;
-        setStatus(`${new URL(e.downloadUrl).host} blocks browsers, so this link is read through your proxy…`);
-        run.trace({ agent: 'fetch', status: 'retry', message: 'Blocked by the server: trying your CORS proxy' });
+        setStatus(`${new URL(e.downloadUrl).host} blocks browsers, so this link is read through ${local ? 'the relay built into your local server' : 'your proxy'}…`);
+        run.trace({ agent: 'fetch', status: 'retry', message: `Blocked by the server: trying ${local ? 'the local relay' : 'your CORS proxy'}` });
         await go(applyProxy(proxy, e.downloadUrl));
       }
     } catch (e) {

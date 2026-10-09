@@ -6,7 +6,7 @@ Instructions for any coding agent (and person) working on DataDrop. Claude Code 
 
 DataDrop: paste any public data URL (GitHub, Google Drive, Dropbox, S3, R2…) or drop a file, get a dashboard. It is 100% client-side:
 DuckDB-WASM for data, Vega-Lite for charts, and LLM agents called straight from the browser with the user's own key.
-**There is no backend.** Don't add one, and don't add a runtime CDN dependency: everything is vendored into `dist/`.
+**There is no backend.** Don't add one, and don't add a runtime CDN dependency: everything is vendored into `dist/`. (`serve.mjs` is the local dev server; its loopback-only `/__relay` for servers without CORS is a convenience for running locally and is not part of the shipped app.)
 
 Module contracts are in [CONTRACT.md](CONTRACT.md). The user-facing overview is in [README.md](README.md).
 

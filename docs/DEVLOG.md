@@ -2,6 +2,13 @@
 
 What changed, why, and how it was verified. Newest first. The format is in [AGENTS.md](../AGENTS.md#devlog-entry-format).
 
+## 2026-10-09: `npm run serve` opens blocked links by itself (local relay, no setup)
+- **Why:** the user ran it locally and still got "online, but it doesn't let other websites read its files" for the NYC taxi link: the relay setting needs a worker they would have to deploy. Locally there is a server already.
+- **Changed:** `serve.mjs` has `/__relay?url=<https address>`, the same code as `docs/cors-worker.js`, **answering this machine only** (loopback address, and an Origin other than the page it serves is refused with 403), so running it never makes you an open proxy; streams the body and stops pulling when the page stops reading. The app, on a blocked link with no proxy set, probes `/__relay?probe=1` (HEAD, marker header `x-datadrop-relay: local`; only on localhost) and retries through it. The deployed GitHub Pages site is static, so the probe fails there and the earlier behaviour (explanation + download link, or your own relay from Settings) stands. A proxy in Settings still wins.
+- **Tests:** `serve-relay.test.mjs` (5: page still served, probe, https/ `?url=` only, another site's Origin refused, a LIVE Range request for the taxi file: 206 and `PAR1`); tier 2: a blocked link goes through `/__relay` with no setting; the "nothing can read it" error path now uses a URL the relay can't open either. `check:full` ✅.
+- **Verified:** no mocks: the real `serve.mjs`, the real build, the real taxi link, Chromium, no settings: loads in about 11 s, 3.7M rows, 32 MB of the 64 MB read in place through 54 relay requests, charts fare_amount by week / by payment_type / distribution, no errors.
+- **Open:** a dev-server convenience only (the project stays backend-free for users: AGENTS.md). Restart `npm run serve` to pick it up.
+
 ## 2026-10-09: Open blocked links through a relay you own; taxi-style code columns are categories
 - **Why:** "so no fix?": the NYC TLC CloudFront link can't be read by any website (no CORS headers), and no public mirror with CORS exists (checked: the nyc-tlc S3 bucket answers 403; no Hugging Face / source.coop copy found). The real fix is a relay that adds the header.
 - **Changed:**

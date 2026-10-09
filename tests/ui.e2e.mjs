@@ -249,13 +249,13 @@ try {
     const w = Object.fromEntries(widths);
     assert.ok(w['Closing price over time'] > w['Monthly average close'] * 1.6, JSON.stringify(widths));
   });
-  await check('a server with no CORS headers: plain explanation plus a link to download the file', async () => {
-    await page.fill('.url-input', 'https://files.example.org/blocked-cors/yellow.parquet');
+  await check('a server nothing can read: plain explanation plus a link to download the file', async () => {
+    await page.fill('.url-input', 'https://files.example.org/blocked-everywhere/yellow.parquet'); // not even a relay can read it
     await page.click('.loadbar button[type=submit]');
     await page.locator('.status.error .status-action').waitFor();
     assert.match(await page.locator('.status.error').textContent(), /files.example.org is online, but it does not let other websites read its files/);
     assert.equal(await page.locator('.status.error .status-action').textContent(), 'Download the file');
-    assert.equal(await page.locator('.status.error .status-action').getAttribute('href'), 'https://files.example.org/blocked-cors/yellow.parquet');
+    assert.equal(await page.locator('.status.error .status-action').getAttribute('href'), 'https://files.example.org/blocked-everywhere/yellow.parquet');
   });
   await check('404 shows inline error, no alert', async () => {
     page.once('dialog', () => { throw new Error('alert() used'); });
@@ -1118,6 +1118,17 @@ try {
     await page.click('.loadbar button[type=submit]');
     await page.waitForFunction(() => document.title.startsWith('ok.csv'));
     assert.equal(await page.evaluate(() => window.__proxied), null, 'a link that is not blocked never goes through the relay');
+  });
+  await page.context().close();
+
+  page = await newPage();
+  await page.goto(BASE);
+  await check('local server: a blocked link is read through the relay built into npm run serve, with no setting', async () => {
+    const url = 'https://files.example.org/blocked-cors/yellow.csv';
+    await page.fill('.url-input', url);
+    await page.click('.loadbar button[type=submit]');
+    await page.locator('.card:not(.skeleton)').first().waitFor({ timeout: 10000 });
+    assert.equal(await page.evaluate(() => window.__proxied), BASE + '__relay?url=' + encodeURIComponent(url));
   });
   await page.context().close();
 

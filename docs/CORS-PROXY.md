@@ -10,6 +10,8 @@ the server blocks**, and only if you paste its address in Settings. Everything e
 **What it means for privacy:** for those links the file passes through your worker (your Cloudflare account, nothing of
 ours). Nobody else sees it. The worker in this repo logs nothing and stores nothing.
 
+**Running locally?** You don't need this: `npm run serve` has the same relay built in (it answers only your own machine) and DataDrop uses it automatically for blocked links. This page is for the deployed site.
+
 ## Set it up (about 5 minutes)
 
 1. Sign in at <https://dash.cloudflare.com> → **Workers & Pages** → **Create** → **Create Worker**. Name it, e.g. `datadrop-relay`, and deploy the starter.

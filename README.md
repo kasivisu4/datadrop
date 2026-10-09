@@ -24,7 +24,7 @@ There is no backend. Your API key is kept in this browser's localStorage and sen
   rows), Remove. A chart that can't be built says so in plain words, with "Show technical details" for the raw error.
 - **Activity** (small button beside the tabs): a slide-over with what the agents did, step by step, with timings.
   Settings › "Show agent steps" keeps a run count next to the button.
-- Any other direct `https://` link to a data file works too (S3, R2, etc.), as long as the server sends CORS headers. If a server doesn't (the NYC taxi files on CloudFront don't), DataDrop says so and offers a download link: save the file and drop it on the page. To open such links by link, run a small free relay of your own and paste its address in Settings: see [docs/CORS-PROXY.md](docs/CORS-PROXY.md).
+- Any other direct `https://` link to a data file works too (S3, R2, etc.), as long as the server sends CORS headers. If a server doesn't (the NYC taxi files on CloudFront don't), DataDrop says so and offers a download link: save the file and drop it on the page. Running locally (`npm run serve`) opens such links by itself through a relay built into the local server (it answers only your own machine). On the deployed site, run a small free relay of your own and paste its address in Settings: see [docs/CORS-PROXY.md](docs/CORS-PROXY.md).
 - Share links are turned into direct downloads: Google Drive (`/file/d/<id>/view`), Google Sheets (the open tab, as
   CSV), Dropbox, OneDrive, SharePoint, Box direct links, GitHub Gist, GitLab, Bitbucket and Hugging Face file pages.
   Links without a file extension are detected from the file's first bytes. **Which links work?** in the app shows how

@@ -63,6 +63,7 @@ Keep this table current: a new feature adds a row, and a changed feature updates
 | SQL tab: examples, guard, run, result grid, history, CSV | `tests/sqlexamples.test.mjs`, in-memory grid tests in `tests/gridmodel.test.mjs`, starter-query run in `tests/agents.test.mjs` | `SQL tab: …` (6 checks) | | |
 | Metric definitions (validate, save per dataset, values, AI prompts, SQL examples) | `tests/metrics.test.mjs`, metric blocks in `tests/agents.test.mjs` | `metrics: …` (3 checks) | | |
 | Views (Overview / Explore / Review), Review suggestion, share links | `tests/modes.test.mjs` | `views: …` (5 checks), `share…` (2) | | |
+| Local relay in `serve.mjs` (loopback only, probe, live taxi Range) | `tests/serve-relay.test.mjs` | `local server: a blocked link is read through the relay…` | | |
 | CORS relay: worker behaviour, proxy setting, retry only when blocked | `tests/cors-worker.test.mjs`, proxy tests in `tests/links.test.mjs` | `CORS proxy…`, `Settings: the proxy address…` | | |
 | Working set: column union, single + parallel build, auto-extend, result cache, memory guard | `tests/workset.test.mjs` | `working set, green/yellow/red…`, `extending the working set…`, `"Clear working set"…`, `phone…`, `"Prefer low memory"…`, `cancel while building…` | `workingset:` block | |
 | Layout model (sections, sizes, priority; planner hints) | `tests/layout.test.mjs`, `planner layout hints…` | full-width trend card in `charts stream in…` | | |
