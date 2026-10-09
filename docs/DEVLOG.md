@@ -2,6 +2,13 @@
 
 What changed, why, and how it was verified. Newest first. The format is in [AGENTS.md](../AGENTS.md#devlog-entry-format).
 
+## 2026-10-09: A link the browser is not allowed to read (NYC TLC CloudFront) now says so, with a way out
+- **Why:** the user pasted `https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2026-01.parquet` and it did not work. Checked the headers: the server answers GET/HEAD (206, 200) but sends **no `Access-Control-Allow-Origin`** and answers the browser's preflight with 403. A website cannot read such a file, whatever tool it is; DataDrop is browser-only by design, so it cannot proxy it.
+- **Changed:** `fetchDirectFile` now tells "blocked" from "unreachable": after a failed fetch it sends a `no-cors` HEAD, which succeeds (opaque) only when the server is online. Blocked: "<host> is online, but it doesn't let other websites read its files (it sends no CORS headers)… Download the file, then drop it on this page." plus a **Download the file** link in the error (`setStatus` takes an action). Unreachable keeps the old message (with the CORS hint). Share links keep their provider-specific advice.
+- **Tests:** `links.test.mjs` (+3: blocked, unreachable, share link unprobed); tier 2: the explanation and the download link. `check` ✅.
+- **Verified:** real Chromium (enforces CORS) against the real build and the real URL: the new message and link; then the same file (64 MB) dropped on the page loads: 3.7M rows, charts drawn.
+- **Open:** nothing in the browser can read this host directly. A hosted copy with CORS (R2, S3 with a CORS rule, Hugging Face) works; a user-supplied CORS proxy would be a privacy trade-off, so it is not built.
+
 ## 2026-10-08: Views and share links (step 7 of 7)
 - **Why:** the persona plan: three arrangements of the same data (Overview, Explore, Review), chosen by the user and only *suggested* by the data, plus links that reopen a dataset in a view.
 - **Changed:**

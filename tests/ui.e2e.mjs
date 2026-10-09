@@ -249,6 +249,14 @@ try {
     const w = Object.fromEntries(widths);
     assert.ok(w['Closing price over time'] > w['Monthly average close'] * 1.6, JSON.stringify(widths));
   });
+  await check('a server with no CORS headers: plain explanation plus a link to download the file', async () => {
+    await page.fill('.url-input', 'https://files.example.org/blocked-cors/yellow.parquet');
+    await page.click('.loadbar button[type=submit]');
+    await page.locator('.status.error .status-action').waitFor();
+    assert.match(await page.locator('.status.error').textContent(), /files.example.org is online, but it does not let other websites read its files/);
+    assert.equal(await page.locator('.status.error .status-action').textContent(), 'Download the file');
+    assert.equal(await page.locator('.status.error .status-action').getAttribute('href'), 'https://files.example.org/blocked-cors/yellow.parquet');
+  });
   await check('404 shows inline error, no alert', async () => {
     page.once('dialog', () => { throw new Error('alert() used'); });
     await page.fill('.url-input', 'https://github.com/o/r/blob/main/does-not-exist.csv');

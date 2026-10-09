@@ -409,11 +409,13 @@ export function mountApp(root, deps) {
   function syncStack() { root.style.setProperty('--stack-h', `${Math.round(chrome.getBoundingClientRect().height)}px`); }
 
   // ---------- status ----------
-  function setStatus(msg, kind = 'info') {
+  // action: an optional { label, href } link shown after the message (e.g. "Download the file")
+  function setStatus(msg, kind = 'info', action = null) {
     if (!msg) { statusEl.hidden = true; statusEl.textContent = ''; return; }
     statusEl.hidden = false;
     statusEl.className = `status notice ${kind}`;
     statusEl.textContent = msg;
+    if (action) statusEl.append(' ', h('a', { class: 'status-action', href: action.href, target: '_blank', rel: 'noopener' }, action.label));
   }
 
   // ---------- providers / pipeline ----------
@@ -1075,7 +1077,7 @@ export function mountApp(root, deps) {
       if (seq !== state.loadSeq) return;
       endRun(run, false);
       clearLoading();
-      setStatus(`Couldn't load that file: ${e.message || e}`, 'error');
+      setStatus(`Couldn't load that file: ${e.message || e}`, 'error', e.blocked ? { label: 'Download the file', href: e.downloadUrl } : null);
       setBusy(false);
       renderLinkHint(); // the how-to for this kind of link, next to the error
     }

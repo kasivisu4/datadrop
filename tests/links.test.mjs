@@ -114,3 +114,37 @@ test('resolveRemoteFile: a Drive link is probed for Parquet (read in place); a S
   assert.equal(await resolveRemoteFile('https://docs.google.com/spreadsheets/d/S/edit', { fetchImpl: () => assert.fail('no probe') }), null);
   assert.equal(await resolveRemoteFile('https://drive.google.com/drive/folders/x', { fetchImpl: () => assert.fail('no probe') }), null);
 });
+
+test('a server that is online but sends no CORS headers: say so, and offer the download', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push(init?.mode || 'cors');
+    if (init?.mode === 'no-cors') return { type: 'opaque', status: 0, ok: false }; // reachable, but unreadable
+    throw new TypeError('Failed to fetch');
+  };
+  const url = 'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2026-01.parquet';
+  await assert.rejects(fetchGitHubFile(url, { fetchImpl }), (e) => {
+    assert.equal(e.blocked, true);
+    assert.equal(e.downloadUrl, url);
+    assert.match(e.message, /^d37ci6vzurychx\.cloudfront\.net is online, but it doesn't let other websites read its files \(it sends no CORS headers\)/);
+    assert.match(e.message, /Download the file, then drop it on this page\./);
+    return true;
+  });
+  assert.deepEqual(calls, ['cors', 'no-cors'], 'one real attempt, then a no-cors probe to tell blocked from offline');
+});
+
+test('an unreachable server is not called a CORS problem with certainty', async () => {
+  const fetchImpl = async () => { throw new TypeError('Failed to fetch'); };
+  await assert.rejects(fetchGitHubFile('https://nowhere.invalid/data.csv', { fetchImpl }), (e) => {
+    assert.equal(e.blocked, undefined);
+    assert.match(e.message, /Couldn't download https:\/\/nowhere\.invalid\/data\.csv .*CORS/);
+    return true;
+  });
+});
+
+test('a share link keeps its provider-specific advice (no probe)', async () => {
+  let probed = false;
+  const fetchImpl = async (u, init) => { if (init?.mode === 'no-cors') probed = true; throw new TypeError('Failed to fetch'); };
+  await assert.rejects(fetchGitHubFile('https://1drv.ms/u/s!x', { fetchImpl }), /OneDrive.*drop it here/);
+  assert.equal(probed, false);
+});

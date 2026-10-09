@@ -179,6 +179,11 @@ function blockedHelp(input) {
 }
 const LINK_FALLBACK_HELP = 'The server may not allow downloads from other websites (CORS). Download the file and drop it here instead.';
 
+/** True when the server answers a no-cors request: it is online, and a normal request failed only for want of CORS headers. */
+async function reachable(url, doFetch) {
+  try { const r = await doFetch(url, { method: 'HEAD', mode: 'no-cors' }); return r?.type === 'opaque' || r?.status === 0; } catch { return false; }
+}
+
 /**
  * Download a data file from any http(s) URL. The server must send CORS headers. `share` is shareLinkToDirect's result
  * for a cloud-drive link: its file name and format (if known) win, and `input` (the share link) stays the source URL.
@@ -198,6 +203,11 @@ async function fetchDirectFile(u, doFetch, { input = u.href, share = null } = {}
   try {
     res = await doFetch(url);
   } catch (e) {
+    // A blocked request and an unreachable server look the same to fetch(). A "no-cors" request tells them apart: it
+    // succeeds (opaque) when the server is there but sends no CORS headers, which no browser-only tool can get around.
+    if (!share && await reachable(url, doFetch)) {
+      throw Object.assign(new Error(`${u.host} is online, but it doesn't let other websites read its files (it sends no CORS headers), so no tool that runs in the browser can open this link directly. Download the file, then drop it on this page.`), { blocked: true, downloadUrl: url });
+    }
     throw new Error(`Couldn't download ${share ? 'the file' + via : url} (${e?.message || e}). ${blockedHelp(input)}`);
   }
   if (!res.ok) {

@@ -4,6 +4,7 @@ export async function fetchGitHubFile(input) {
   await new Promise((r) => setTimeout(r, /slow/.test(input) ? 1600 : 60));
   const s = String(input).replace(/^https?:\/\/github\.com\//, '').replace(/^#?\/?/, '');
   if (/drive\.google\.com/.test(s)) throw new Error('Couldn\'t download the file from Google Drive (Failed to fetch). Check the file is shared with "Anyone with the link".');
+  if (/blocked-cors/.test(s)) throw Object.assign(new Error('files.example.org is online, but it does not let other websites read its files (it sends no CORS headers), so no tool that runs in the browser can open this link directly. Download the file, then drop it on this page.'), { blocked: true, downloadUrl: String(input) });
   if (/does-not-exist/.test(s)) throw new Error('File not found on GitHub (404). Check the branch and path.');
   const [owner, repo, , ref, ...p] = s.split('/');
   const path = p.join('/');
