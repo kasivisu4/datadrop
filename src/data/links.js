@@ -158,6 +158,27 @@ export const LINK_SOURCES = [
   },
 ];
 
+/**
+ * Settings: "CORS proxy". The address of a small relay you run yourself (docs/CORS-PROXY.md) that adds the CORS headers a
+ * server forgot. A template with {url}, or an address that ends in "=" or "/" and takes the encoded URL after it.
+ * -> { template } or { error }
+ */
+export function parseProxy(input) {
+  const t = String(input ?? '').trim();
+  if (!t) return { template: '' };
+  let u;
+  try { u = new URL(t.replace('{url}', 'x')); } catch { return { error: 'That is not a web address.' }; }
+  if (u.protocol !== 'https:') return { error: 'The proxy must be an https:// address.' };
+  if (!t.includes('{url}') && !/[=/]$/.test(t)) return { error: 'Put {url} where the data link goes, e.g. https://my-proxy.workers.dev/?url={url}' };
+  return { template: t };
+}
+
+/** The address to fetch for `url` through a proxy template (see parseProxy). */
+export function applyProxy(template, url) {
+  const enc = encodeURIComponent(url);
+  return template.includes('{url}') ? template.replace('{url}', enc) : template + enc;
+}
+
 /** The LINK_SOURCES entry a pasted link belongs to, or null for empty input. */
 export function linkSourceFor(input) {
   const s = String(input ?? '').trim();

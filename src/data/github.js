@@ -189,7 +189,7 @@ async function reachable(url, doFetch) {
  * for a cloud-drive link: its file name and format (if known) win, and `input` (the share link) stays the source URL.
  * Without a known format, the format is detected from the first bytes.
  */
-async function fetchDirectFile(u, doFetch, { input = u.href, share = null } = {}) {
+async function fetchDirectFile(u, doFetch, { input = u.href, share = null, proxied = null } = {}) {
   const url = u.href;
   const path = decodeSegs(u.pathname.split('/').filter(Boolean)).join('/');
   const named = share?.fileName || path.split('/').pop() || u.hostname;
@@ -201,8 +201,9 @@ async function fetchDirectFile(u, doFetch, { input = u.href, share = null } = {}
   }
   let res;
   try {
-    res = await doFetch(url);
+    res = await doFetch(proxied || url);
   } catch (e) {
+    if (proxied) throw new Error(`Couldn't download through your CORS proxy (${e?.message || e}). Check its address in Settings, and that it passes Range requests and the file's host.`);
     // A blocked request and an unreachable server look the same to fetch(). A "no-cors" request tells them apart: it
     // succeeds (opaque) when the server is there but sends no CORS headers, which no browser-only tool can get around.
     if (!share && await reachable(url, doFetch)) {
@@ -232,7 +233,7 @@ async function fetchDirectFile(u, doFetch, { input = u.href, share = null } = {}
  * (a Git LFS pointer fails that, so the LFS media URL is tried next).
  * Returns { url, format, fileName, source, sizeBytes? }, or null to fall back to a full download.
  */
-export async function resolveRemoteFile(input, { fetchImpl, token } = {}) {
+export async function resolveRemoteFile(input, { fetchImpl, token, proxied } = {}) {
   if (token) return null; // DuckDB's HTTP reader can't send the Authorization header
   const doFetch = fetchImpl || globalThis.fetch.bind(globalThis);
   let source;
@@ -255,7 +256,7 @@ export async function resolveRemoteFile(input, { fetchImpl, token } = {}) {
     } else {
       source = { url: u.href, host: u.host, path: decodeSegs(u.pathname.split('/').filter(Boolean)).join('/') };
     }
-    urls = [u.href];
+    urls = [!share && proxied ? proxied : u.href]; // a proxy address is only for reading; the file keeps its own name and source
   }
   if (detectFormat(source.path) !== 'parquet') return null;
   for (const url of urls) {
@@ -315,7 +316,7 @@ async function fetchHfGlob(input, src, doFetch) {
  * With a token, uses the contents API (works for private repos).
  * Any other http(s) URL is fetched directly; its source is { url, host, path } instead of { owner, repo, ref, path }.
  */
-export async function fetchGitHubFile(input, { fetchImpl, token } = {}) {
+export async function fetchGitHubFile(input, { fetchImpl, token, proxied } = {}) {
   const doFetch = fetchImpl || globalThis.fetch.bind(globalThis);
   const hf = parseHfUri(input);
   if (hf && hasGlob(hf.path)) return fetchHfGlob(String(input).trim(), hf, doFetch);
@@ -325,7 +326,7 @@ export async function fetchGitHubFile(input, { fetchImpl, token } = {}) {
     const share = shareLinkToDirect(raw); // throws for links that can't work (folders, Box share pages)
     if (share) return fetchDirectFile(new URL(share.url), doFetch, { input: raw, share });
     const direct = parseDirectUrl(input);
-    if (direct) return fetchDirectFile(direct, doFetch, { input: direct.href });
+    if (direct) return fetchDirectFile(direct, doFetch, { input: direct.href, proxied });
     throw new Error(`Not a recognised file URL: "${input}". Paste a share link (GitHub, Google Drive or Sheets, Dropbox, OneDrive…), a direct https:// link, or an s3://, gs:// or hf:// URI for a public object. See "Which links work?" for details.`);
   }
   if (src.kind === 'tree') throw new Error('That URL points to a folder. Open a specific data file and paste its URL.');

@@ -7,7 +7,7 @@ import { inferLayout, normalizeLayout } from './layout.js';
 import { explainCard } from './explain.js';
 import { guardSQL } from '../data/sqlguard.js';
 export { guardSQL }; // tests and callers import it from here
-import { isIdLike, isIdName, isRowKeyName, aggregateFor, measureRank, STATUS_NAME } from '../data/roles.js';
+import { isIdLike, isIdName, isRowKeyName, isCodeColumn, aggregateFor, measureRank, STATUS_NAME } from '../data/roles.js';
 
 const MAX_REPAIRS = 2;
 const MAX_CHARTS = 4;
@@ -250,9 +250,10 @@ export function heuristicCharts(profile) {
   // An identifier is never a number to sum or bin (an account number, a txn id). A few-valued one (7 accounts) still
   // makes a useful breakdown, so it counts as a category.
   const fewIds = (c) => isIdLike(c, rc) && !isRowKeyName(c) && c.distinct != null && c.distinct >= 2 && c.distinct <= 50;
-  const quant = cols.filter((c) => c.kind === 'quantitative' && !lowCardNum(c) && !isIdName(c) && !isIdLike(c, rc) && (distinctOf(c) ?? 2) > 1)
+  const quant = cols.filter((c) => c.kind === 'quantitative' && !lowCardNum(c) && !isCodeColumn(c) && !isIdName(c) && !isIdLike(c, rc) && (distinctOf(c) ?? 2) > 1)
     .map((c, i) => ({ c, i })).sort((a, b) => measureRank(a.c) - measureRank(b.c) || a.i - b.i).map((x) => x.c);
-  const nominal = cols.filter((c) => (c.kind === 'nominal' || c.kind === 'boolean' || lowCardNum(c) || (c.kind === 'quantitative' && fewIds(c))) && (!isIdLike(c, rc) || fewIds(c)));
+  // a payment_type stored as 1, 2, 3 is a category, not a number to add up
+  const nominal = cols.filter((c) => (c.kind === 'nominal' || c.kind === 'boolean' || lowCardNum(c) || isCodeColumn(c) || (c.kind === 'quantitative' && fewIds(c))) && (!isIdLike(c, rc) || fewIds(c)));
   const goodNominal = nominal.filter((c) => (distinctOf(c) ?? 2) >= 2 && (distinctOf(c) ?? 0) <= Math.max(50, rc * 0.5))
     .sort((a, b) => (distinctOf(a) ?? 0) - (distinctOf(b) ?? 0));
   // status-like columns (status, type, category…) split data into groups people ask about: prefer them

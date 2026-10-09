@@ -14,7 +14,13 @@ export const NON_ADDITIVE = /(balance|price|rate|ratio|pct|percent|score|age|tem
 /** Names of the columns that split data into a few meaningful groups. */
 export const STATUS_NAME = /(status|state|type|category|class|kind|stage|channel|method|direction|result|outcome|segment|tier)/i;
 
-export const isIdName = (c) => ID_NAME.test(c?.name || '');
+// camelCase ids (VendorID, RatecodeID, PULocationID, userId): case-sensitive on purpose, so "paid", "valid" or "grid" are not ids
+const CAMEL_ID = /[a-z0-9](ID|Id)$/;
+
+export const isIdName = (c) => ID_NAME.test(c?.name || '') || CAMEL_ID.test(c?.name || '');
+
+/** A whole-number column that names a kind of thing (payment_type, status_code): a category stored as a number, not a measure. */
+export const isCodeColumn = (c) => c?.kind === 'quantitative' && !/^(DOUBLE|FLOAT|REAL|DECIMAL|NUMERIC)/i.test(c.type || '') && STATUS_NAME.test(c.name || '');
 
 /** A row key (id, index, uuid): different on every row by design, never a group. */
 export const isRowKeyName = (c) => /^(id|index|unnamed.*)$|uuid/i.test(c?.name || '');

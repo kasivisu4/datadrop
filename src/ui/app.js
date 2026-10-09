@@ -2,7 +2,7 @@
 import { orderCards } from '../agents/layout.js';
 import { estimateSample, readMemorySignals, memoryTier, cacheDecision, memoryBudgetMB } from '../data/memory.js';
 import { unionColumns } from '../data/workset.js';
-import { LINK_SOURCES, linkSourceFor } from '../data/links.js';
+import { LINK_SOURCES, linkSourceFor, parseProxy, applyProxy } from '../data/links.js';
 import { planChecks, summarize as summarizeChecks } from '../data/check.js';
 import { rowForDatum, drillWhere, drillSql, reconcile, drillColumns, drillFields } from '../data/drill.js';
 import { h } from './dom.js';
@@ -85,7 +85,7 @@ function fmtPct(p) {
 
 // ---------- settings ----------
 function loadSettings() {
-  const d = { provider: 'none', apiKey: '', model: '', baseUrl: '', cacheMode: 'ask', showSteps: false };
+  const d = { provider: 'none', apiKey: '', model: '', baseUrl: '', cacheMode: 'ask', showSteps: false, corsProxy: '' };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY) ?? localStorage.getItem(OLD_SETTINGS_KEY);
     if (raw) return { ...d, ...JSON.parse(raw) };
@@ -356,6 +356,7 @@ export function mountApp(root, deps) {
     h('option', { value: 'fast' }, 'Fast mode: cache every column'),
     h('option', { value: 'light' }, 'Prefer low memory (no working set)'));
   const sSteps = h('input', { id: 'gv-steps', type: 'checkbox', name: 'showSteps' });
+  const sProxy = h('input', { id: 'gv-proxy', type: 'url', autocomplete: 'off', spellcheck: 'false', placeholder: 'https://your-proxy.workers.dev/?url={url}' });
   const sClear = h('button', { type: 'button', class: 'btn small', disabled: true, onclick: () => { clearWorkingSet(); } }, 'Clear working set');
   const sMsg = h('p', { class: 'small muted', role: 'status' });
   const field = (label, input, extra) => h('div', { class: 'field', dataset: { field: input.id } }, h('label', { for: input.id }, label), input, extra);
@@ -372,6 +373,7 @@ export function mountApp(root, deps) {
       h('div', { class: 'field' }, h('label', { class: 'check', for: 'gv-steps' }, sSteps, 'Show agent steps'),
         h('p', { class: 'small muted' }, 'Keeps a count of the agents\' runs next to the Activity button. Off: it only says "working…" while something runs.')),
       field('Large files', sCache, [h('p', { class: 'small muted' }, 'For big remote files, DataDrop copies the columns your charts use into memory once, so charts and questions run instantly. Fast mode copies every column; low memory reads the file for every chart instead (slower, lighter).'), sClear]),
+      field('Links that block browsers (optional)', sProxy, h('p', { class: 'small muted' }, 'Some servers (like the NYC taxi files) don\'t let websites read them. If you run a small relay of your own, DataDrop uses it for those links only; your data then passes through your relay. ', h('a', { href: 'https://github.com/kasivisu4/datadrop/blob/main/docs/CORS-PROXY.md', target: '_blank', rel: 'noopener' }, 'How to set one up (free, 5 minutes)'))),
       h('div', { class: 'drawer-actions' },
         h('button', { type: 'submit', class: 'btn primary' }, 'Save'),
         h('button', { type: 'button', class: 'btn', onclick: () => closeSettings() }, 'Cancel')),
@@ -1053,8 +1055,9 @@ export function mountApp(root, deps) {
       run.trace({ agent: 'fetch', status: 'start', message: `Fetching ${shortUrl(url)}` });
       const duckP = ensureDuck(run.trace); // boot DuckDB in parallel with the download
       duckP.catch(() => {});
+      const go = async (proxied) => {
       // Parquet on a server with range requests: query it in place instead of downloading it all.
-      const remote = resolveRemoteFile ? await resolveRemoteFile(url).catch(() => null) : null;
+      const remote = resolveRemoteFile ? await resolveRemoteFile(url, { proxied }).catch(() => null) : null;
       if (remote) {
         run.trace({ agent: 'fetch', status: 'done', message: `${remote.fileName} · ${fmtBytes(remote.sizeBytes)} · parquet, read in place`, ms: performance.now() - t0 });
         if (seq !== state.loadSeq) return endRun(run, true);
@@ -1064,7 +1067,7 @@ export function mountApp(root, deps) {
       }
       let f;
       try {
-        f = await fetchGitHubFile(url);
+        f = await fetchGitHubFile(url, { proxied });
       } catch (e) {
         run.trace({ agent: 'fetch', status: 'error', message: e.message, ms: performance.now() - t0 });
         throw e;
@@ -1073,6 +1076,15 @@ export function mountApp(root, deps) {
       if (seq !== state.loadSeq) return endRun(run, true);
       await duckP;
       await loadInput({ bytes: f.bytes, parts: f.parts, format: f.format, fileName: f.fileName }, { source: f.source, sizeBytes: f.sizeBytes ?? f.bytes?.byteLength, fileCount: f.fileCount }, run, seq);
+      };
+      try { await go(null); } catch (e) {
+        // the server blocks browsers: if the user set up a relay of their own, read this one link through it
+        const proxy = parseProxy(state.settings.corsProxy).template;
+        if (!(e?.blocked && proxy) || seq !== state.loadSeq) throw e;
+        setStatus(`${new URL(e.downloadUrl).host} blocks browsers, so this link is read through your proxy…`);
+        run.trace({ agent: 'fetch', status: 'retry', message: 'Blocked by the server: trying your CORS proxy' });
+        await go(applyProxy(proxy, e.downloadUrl));
+      }
     } catch (e) {
       if (seq !== state.loadSeq) return;
       endRun(run, false);
@@ -1457,6 +1469,7 @@ export function mountApp(root, deps) {
     sModel.value = s.model || '';
     sBase.value = s.baseUrl || '';
     sCache.value = s.cacheMode || 'ask';
+    sProxy.value = s.corsProxy || '';
     sSteps.checked = !!s.showSteps;
     syncSettingsFields();
   }
@@ -1487,9 +1500,11 @@ export function mountApp(root, deps) {
     lastFocus?.focus?.();
   }
   function applySettings() {
-    const next = { provider: sProvider.value, apiKey: sKey.value.trim(), model: sModel.value.trim(), baseUrl: sBase.value.trim(), cacheMode: sCache.value, showSteps: sSteps.checked };
+    const next = { provider: sProvider.value, apiKey: sKey.value.trim(), model: sModel.value.trim(), baseUrl: sBase.value.trim(), cacheMode: sCache.value, showSteps: sSteps.checked, corsProxy: sProxy.value.trim() };
+    const px = parseProxy(next.corsProxy);
+    if (px.error) { sMsg.textContent = px.error; sProxy.focus(); return; }
     if (next.provider !== 'none' && !next.apiKey) { sMsg.textContent = 'Enter an API key, or choose None.'; sKey.focus(); return; }
-    const ai = (s) => JSON.stringify({ ...s, cacheMode: undefined, showSteps: undefined });
+    const ai = (s) => JSON.stringify({ ...s, cacheMode: undefined, showSteps: undefined, corsProxy: undefined });
     const changed = ai(next) !== ai(state.settings);
     const cacheChanged = next.cacheMode !== (state.settings.cacheMode || 'ask');
     state.settings = next;

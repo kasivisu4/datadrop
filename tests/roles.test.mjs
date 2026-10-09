@@ -40,3 +40,18 @@ test('STATUS_NAME', () => {
   for (const n of ['status', 'payment_type', 'category', 'channel', 'tx_state']) assert.equal(STATUS_NAME.test(n), true, n);
   for (const n of ['amount', 'merchant', 'currency']) assert.equal(STATUS_NAME.test(n), false, n);
 });
+
+import { isCodeColumn } from '../src/data/roles.js';
+
+test('camelCase ids are identifiers; words that merely end in "id" are not', () => {
+  for (const n of ['VendorID', 'RatecodeID', 'PULocationID', 'DOLocationID', 'userId', 'accountId']) assert.equal(isIdName({ name: n }), true, n);
+  for (const n of ['paid', 'valid', 'grid', 'amount_paid', 'Paid', 'bid']) assert.equal(isIdName({ name: n }), false, n);
+});
+
+test('isCodeColumn: a whole-number "type" or "code" is a category, a fractional one is not', () => {
+  assert.equal(isCodeColumn({ name: 'payment_type', type: 'BIGINT', kind: 'quantitative' }), true);
+  assert.equal(isCodeColumn({ name: 'status_code', type: 'INTEGER', kind: 'quantitative' }), true);
+  assert.equal(isCodeColumn({ name: 'payment_type', type: 'VARCHAR', kind: 'nominal' }), false, 'text is already a category');
+  assert.equal(isCodeColumn({ name: 'type_score', type: 'DOUBLE', kind: 'quantitative' }), false);
+  assert.equal(isCodeColumn({ name: 'fare_amount', type: 'DOUBLE', kind: 'quantitative' }), false);
+});

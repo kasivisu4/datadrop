@@ -22,6 +22,7 @@ src/
   ui/gridmodel.js         Data tab logic, pure: column roles, formatCell, windowFor, pagesFor, columnGroups
   ui/dom.js               h() DOM helper
   data/roles.js           column meaning: identifier, additive vs level measure, status-like (shared by charts and the Data tab)
+  docs/cors-worker.js     optional Cloudflare Worker relay for servers without CORS (see docs/CORS-PROXY.md)
   data/modes.js           views (Overview/Explore/Review), suggestMode, prefs, share links (pure)
   data/metrics.js         metric definitions: validate, save per dataset, prompt block, suggestions (pure)
   ui/metrics.js           metric cards + define form

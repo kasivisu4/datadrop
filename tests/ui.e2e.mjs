@@ -1105,6 +1105,43 @@ try {
   });
   await page.context().close();
 
+  page = await newPage({}, { provider: 'none', apiKey: '', model: '', baseUrl: '', corsProxy: 'https://relay.example/?url={url}' });
+  await page.goto(BASE);
+  await check('CORS proxy (your own relay): a blocked link is retried through it, and only then', async () => {
+    const url = 'https://files.example.org/blocked-cors/yellow.csv';
+    await page.fill('.url-input', url);
+    await page.click('.loadbar button[type=submit]');
+    await page.locator('.card:not(.skeleton)').first().waitFor({ timeout: 10000 });
+    assert.equal(await page.locator('.status.error').count() + await page.locator('.status.error:visible').count(), 0, 'no error: it loaded');
+    assert.equal(await page.evaluate(() => window.__proxied), 'https://relay.example/?url=' + encodeURIComponent(url), 'read through the relay');
+    await page.fill('.url-input', 'https://github.com/o/r/blob/main/ok.csv');
+    await page.click('.loadbar button[type=submit]');
+    await page.waitForFunction(() => document.title.startsWith('ok.csv'));
+    assert.equal(await page.evaluate(() => window.__proxied), null, 'a link that is not blocked never goes through the relay');
+  });
+  await page.context().close();
+
+  page = await newPage();
+  await page.goto(BASE);
+  await check('Settings: the proxy address is validated (https, with {url}) and remembered', async () => {
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.locator('.drawer-panel').waitFor();
+    assert.match(await page.locator('.drawer-panel').textContent(), /Links that block browsers/);
+    assert.equal(await page.locator('.drawer-panel a[href$="docs/CORS-PROXY.md"]').count(), 1, 'links to the how-to');
+    await page.fill('#gv-proxy', 'http://relay.example/?url={url}');
+    await page.getByRole('button', { name: 'Save' }).click();
+    assert.match(await page.locator('.drawer-panel [role=status]').textContent(), /must be an https:\/\/ address/);
+    await page.fill('#gv-proxy', 'https://relay.example/relay');
+    await page.getByRole('button', { name: 'Save' }).click();
+    assert.match(await page.locator('.drawer-panel [role=status]').textContent(), /Put \{url\} where the data link goes/);
+    await page.fill('#gv-proxy', 'https://relay.example/?url={url}');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await page.locator('.drawer-panel').waitFor({ state: 'hidden' });
+    await page.getByRole('button', { name: 'Settings' }).click();
+    assert.equal(await page.inputValue('#gv-proxy'), 'https://relay.example/?url={url}');
+  });
+  await page.context().close();
+
   page = await newPage();
   await page.addInitScript(() => { window.__stubWide = true; });
   await page.goto(BASE);

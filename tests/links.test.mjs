@@ -148,3 +148,49 @@ test('a share link keeps its provider-specific advice (no probe)', async () => {
   await assert.rejects(fetchGitHubFile('https://1drv.ms/u/s!x', { fetchImpl }), /OneDrive.*drop it here/);
   assert.equal(probed, false);
 });
+
+import { parseProxy, applyProxy } from '../src/data/links.js';
+
+test('parseProxy: https only, with a place for the link', () => {
+  assert.deepEqual(parseProxy(''), { template: '' });
+  assert.deepEqual(parseProxy('  '), { template: '' });
+  assert.equal(parseProxy('https://relay.workers.dev/?url={url}').template, 'https://relay.workers.dev/?url={url}');
+  assert.equal(parseProxy('https://relay.workers.dev/?url=').template, 'https://relay.workers.dev/?url=');
+  assert.equal(parseProxy('https://relay.workers.dev/').template, 'https://relay.workers.dev/');
+  assert.match(parseProxy('http://relay.workers.dev/?url={url}').error, /https/);
+  assert.match(parseProxy('https://relay.workers.dev/relay').error, /\{url\}/);
+  assert.match(parseProxy('not a url').error, /web address/);
+});
+
+test('applyProxy: the encoded link goes where {url} is, or after a trailing = or /', () => {
+  const u = 'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2026-01.parquet';
+  const enc = encodeURIComponent(u);
+  assert.equal(applyProxy('https://r.dev/?url={url}', u), `https://r.dev/?url=${enc}`);
+  assert.equal(applyProxy('https://r.dev/?url=', u), `https://r.dev/?url=${enc}`);
+  assert.equal(applyProxy('https://r.dev/', u), `https://r.dev/${enc}`);
+  assert.equal(new URL(applyProxy('https://r.dev/?url={url}', u)).searchParams.get('url'), u, 'round trip');
+});
+
+test('a proxied read: bytes come from the proxy address, the file keeps its own name and source', async () => {
+  const url = 'https://files.example.org/data/trips.parquet';
+  const proxied = 'https://relay.dev/?url=' + encodeURIComponent(url);
+  const seen = [];
+  const impl = async (u, init) => {
+    seen.push(String(u));
+    return init?.method === 'HEAD' ? { ok: true, status: 200, headers: new Headers({ 'content-length': '5000' }) } : { ok: true, status: 206, headers: new Headers(), arrayBuffer: async () => new TextEncoder().encode('PAR1').buffer };
+  };
+  const r = await resolveRemoteFile(url, { fetchImpl: impl, proxied });
+  assert.equal(r.url, proxied, 'DuckDB reads through the proxy (range requests)');
+  assert.equal(r.fileName, 'trips.parquet');
+  assert.equal(r.source.url, url, 'the source stays the real address');
+  assert.equal(r.source.host, 'files.example.org');
+  assert.ok(seen.every((s) => s.startsWith('https://relay.dev/')), seen.join(' | '));
+  // a CSV through the proxy is downloaded from the proxy, named from the real URL
+  const csvSeen = [];
+  const f = await fetchGitHubFile('https://files.example.org/x/y.csv', { proxied: 'https://relay.dev/?url=z', fetchImpl: async (u) => { csvSeen.push(String(u)); return respond('a,b\n1,2\n'); } });
+  assert.deepEqual(csvSeen, ['https://relay.dev/?url=z']);
+  assert.equal(f.fileName, 'y.csv');
+  assert.equal(f.source.url, 'https://files.example.org/x/y.csv');
+  // a failing proxy says it is the proxy
+  await assert.rejects(fetchGitHubFile('https://files.example.org/x/y.csv', { proxied: 'https://relay.dev/?url=z', fetchImpl: async () => { throw new TypeError('Failed to fetch'); } }), /through your CORS proxy/);
+});

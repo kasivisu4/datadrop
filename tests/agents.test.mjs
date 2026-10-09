@@ -800,3 +800,30 @@ test('metrics: the AI is told the user\'s definitions, for the dashboard and for
   await p.ask('anything');
   assert.doesNotMatch(seen.find((s) => s.kind === 'sql').system, /Defined metrics/);
 });
+
+// ------------------------------------------------------------ taxi-trip-like data (NYC TLC): codes stored as numbers
+
+test('heuristicCharts on a taxi-trip profile: VendorID / payment_type are categories, fare_amount is the measure', () => {
+  const col = (name, type, kind, extra = {}) => ({ name, type, kind, nullPct: 0, distinct: null, min: null, max: null, bytesPerRow: 1.5, ...extra });
+  const plans = heuristicCharts({
+    table: 'trips', rowCount: 3.7e6, sample: [], remote: true,
+    columns: [
+      col('VendorID', 'BIGINT', 'quantitative', { bytesPerRow: 0.3 }),
+      col('tpep_pickup_datetime', 'TIMESTAMP', 'temporal', { min: '2026-01-01', max: '2026-01-31' }),
+      col('passenger_count', 'BIGINT', 'quantitative', { bytesPerRow: 0.4 }),
+      col('trip_distance', 'DOUBLE', 'quantitative', { min: 0, max: 400, bytesPerRow: 2.1 }),
+      col('RatecodeID', 'BIGINT', 'quantitative', { bytesPerRow: 0.2 }),
+      col('store_and_fwd_flag', 'VARCHAR', 'nominal', { bytesPerRow: 0.14 }),
+      col('PULocationID', 'BIGINT', 'quantitative', { bytesPerRow: 1.2 }),
+      col('payment_type', 'BIGINT', 'quantitative', { bytesPerRow: 0.39 }),
+      col('fare_amount', 'DOUBLE', 'quantitative', { min: -10, max: 900, bytesPerRow: 2.4 }),
+      col('total_amount', 'DOUBLE', 'quantitative', { min: -10, max: 950, bytesPerRow: 2.6 }),
+    ],
+  });
+  const sqls = plans.map((p) => p.sql).join('\n');
+  assert.match(plans[0].title, /^fare_amount by (day|week)$/, plans.map((p) => p.title).join(' | '));
+  assert.ok(!/SUM\("(VendorID|RatecodeID|PULocationID|payment_type)"\)/.test(sqls), 'an id or a code is never summed');
+  assert.ok(!/"(VendorID|RatecodeID|PULocationID)" AS DOUBLE/.test(sqls), 'nor binned');
+  assert.ok(!plans.some((p) => /^Distribution of (payment_type|VendorID)/.test(p.title)));
+  assert.ok(plans.some((p) => /^Top .* by count/.test(p.title)), plans.map((p) => p.title).join(' | '));
+});
