@@ -3,8 +3,9 @@
 //   node build.mjs --minify   -> minified bundle
 //   node build.mjs --stub     -> tests/ui-stubs/dist/, with src/data/* and src/agents/* swapped for tests/ui-stubs/*
 import * as esbuild from 'esbuild';
-import { cp, mkdir, rm } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { cp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -48,8 +49,14 @@ async function main() {
     plugins: stub ? [stubPlugin] : [],
   });
 
-  await cp(path.join(root, 'public/index.html'), path.join(outdir, 'index.html'));
   await cp(path.join(root, 'src/ui/styles.css'), path.join(outdir, 'styles.css'));
+  // stamp app.js / styles.css with their content hash so a deploy is never mixed with a cached older copy
+  // (GitHub Pages serves everything with max-age=600)
+  const stamp = (f) => createHash('sha256').update(readFileSync(path.join(outdir, f))).digest('hex').slice(0, 10);
+  const html = readFileSync(path.join(root, 'public/index.html'), 'utf8')
+    .replace('"./app.js"', `"./app.js?v=${stamp('app.js')}"`)
+    .replace('"./styles.css"', `"./styles.css?v=${stamp('styles.css')}"`);
+  await writeFile(path.join(outdir, 'index.html'), html);
 
   const duck = nm('@duckdb/duckdb-wasm/dist');
   for (const f of ['duckdb-eh.wasm', 'duckdb-mvp.wasm', 'duckdb-browser-eh.worker.js', 'duckdb-browser-mvp.worker.js']) {

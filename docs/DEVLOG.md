@@ -2,6 +2,13 @@
 
 What changed, why, and how it was verified. Newest first. The format is in [AGENTS.md](../AGENTS.md#devlog-entry-format).
 
+## 2026-10-09: A deploy is picked up as a whole (versioned app.js / styles.css)
+- **Why:** after the Review fix was deployed the user still saw blank charts on the live site: GitHub Pages serves every file with `max-age=600`, so a browser can keep running the old `app.js` for up to 10 minutes, or mix a new page with an old script.
+- **Changed:** `build.mjs` writes `index.html` with `app.js?v=<hash>` and `styles.css?v=<hash>` (sha256 of the built file).
+- **Tests:** `check:full` ✅ (all tiers load the stamped page).
+- **Verified:** `dist/index.html` references `./app.js?v=fb1701c28e`, `./styles.css?v=6b001454ff`; the live `app.js` already had the Review fix (`_stale`) before this change.
+- **Open:** `index.html` itself is still cached up to 10 minutes; a hard refresh (Ctrl+Shift+R) skips that.
+
 ## 2026-10-09: Charts no longer come out blank in the Review view
 - **Why:** the user opened the NICS CSV on the live site and saw empty chart cards (titles, row counts, no marks). Their saved view was Review, which opens on the Data tab, so the charts were drawn while the Charts tab was hidden: Vega sized them to 0 px and nothing redrew them when the tab was opened.
 - **Changed:** `src/ui/app.js`: `drawViz` skips drawing while the Charts tab is not shown and marks the card stale; `setView('charts')` draws stale cards at the real width.
