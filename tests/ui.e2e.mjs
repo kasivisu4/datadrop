@@ -1035,6 +1035,12 @@ try {
     await page.locator('.view-select').waitFor();
     assert.equal(await page.locator('.view-select').inputValue(), 'review', 'remembered across a reload');
     await page.locator('.view-tab[data-view=data]').waitFor();
+    // the charts were made while their tab was hidden: opening it draws them at full width, not 0 px
+    await page.locator('.card:not(.skeleton):not(.pending) .viz').first().waitFor({ state: 'attached' });
+    await page.locator('.view-tab[data-view=charts]').click();
+    await page.locator('.card .vega-embed svg').first().waitFor({ timeout: 10000 });
+    const widths = await page.locator('.card .vega-embed svg').evaluateAll((els) => els.map((e) => Number(e.getAttribute('width'))));
+    assert.ok(widths.length && widths.every((w) => w > 100), `charts drawn after a hidden load have a real width: ${widths}`);
     // a link with ?view=explore: that visit is Explore, the saved choice stays Review
     await page.goto(BASE + '?url=' + encodeURIComponent('https://github.com/o/r/blob/main/ok.csv') + '&view=explore&tab=sql');
     await page.locator('.view-tab[data-view=sql]').waitFor();

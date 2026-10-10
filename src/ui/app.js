@@ -320,6 +320,7 @@ export function mountApp(root, deps) {
     explorer.activate(data);
     sqlbox.activate(state.view === 'sql');
     metricsPanel.setVisible(state.view === 'charts');
+    if (state.view === 'charts') for (const c of state.cards) if (c._stale && !c.error) drawViz(c);
     if (typeof updateShare === 'function') updateShare();
   }
   // keep the tabs and the explorer in step with state.dataset (called from renderDataset)
@@ -807,6 +808,9 @@ export function mountApp(root, deps) {
       viz.append(renderTable(rows, card.columns));
       return;
     }
+    // a hidden Charts tab (the Review view opens on Data) has no width to size to: draw it when the tab is shown
+    if (state.view !== 'charts') { card._stale = true; return; }
+    card._stale = false;
     viz.classList.add('viz-chart');
     const target = h('div', { class: 'vega-target' });
     viz.append(target);
