@@ -10,7 +10,7 @@ import { columnRole, formatCell } from './gridmodel.js';
 import { createExplorer } from './explorer.js';
 import { createSqlBox } from './sqlbox.js';
 import { createMetricsPanel } from './metrics.js';
-import { MODES, isMode, suggestMode, loadPrefs, savePrefs, parseShare, buildShareLink } from '../data/modes.js';
+import { MODES, isMode, suggestMode, loadPrefs, savePrefs, parseShare, buildShareLink, linkFromLocation, linkPath } from '../data/modes.js';
 import { metricKey } from '../data/metrics.js';
 import { guardSQL } from '../data/sqlguard.js';
 import { prepareSpec } from './chartstyle.js';
@@ -97,7 +97,11 @@ function saveSettings(s) {
 }
 
 // ---------- URL routing ----------
+// The address is the app's folder, then the data link as pasted: …/datadrop/https://raw.githubusercontent.com/…
+// Older addresses still open: ?url=<link> and #/owner/repo/blob/ref/path.
+const HERE = linkFromLocation(location);
 function initialUrl() {
+  if (HERE.link) return HERE.link;
   try {
     const q = new URLSearchParams(location.search).get('url');
     if (q) return q.trim();
@@ -464,7 +468,7 @@ export function mountApp(root, deps) {
     if (!state.duckPromise) {
       const t0 = performance.now();
       onTrace({ agent: 'duckdb', status: 'start', message: 'Starting DuckDB-WASM' });
-      const baseUrl = new URL('./duckdb/', location.href).href;
+      const baseUrl = new URL('./duckdb/', document.baseURI).href;
       state.duckPromise = Duck.create({ baseUrl }).then((d) => {
         state.duck = d;
         d.onWorkingSet = onWorkingSetEvent;
@@ -1056,6 +1060,7 @@ export function mountApp(root, deps) {
   }
 
   async function loadUrl(url) {
+    const link = /^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `https://github.com/${url.replace(/^\/+/, '')}`; // shown and shared as pasted
     setView('charts'); // loading progress and the first charts show there
     abortPendingCharts();
     abortCache();
@@ -1076,7 +1081,7 @@ export function mountApp(root, deps) {
         run.trace({ agent: 'fetch', status: 'done', message: `${remote.fileName} · ${fmtBytes(remote.sizeBytes)} · parquet, read in place`, ms: performance.now() - t0 });
         if (seq !== state.loadSeq) return endRun(run, true);
         await duckP;
-        await loadInput({ remoteUrl: remote.url, format: remote.format, fileName: remote.fileName }, { source: remote.source, sizeBytes: remote.sizeBytes }, run, seq);
+        await loadInput({ remoteUrl: remote.url, format: remote.format, fileName: remote.fileName }, { source: remote.source, sizeBytes: remote.sizeBytes, link }, run, seq);
         return;
       }
       let f;
@@ -1089,7 +1094,7 @@ export function mountApp(root, deps) {
       run.trace({ agent: 'fetch', status: 'done', message: `${f.fileName}${f.fileCount ? ` × ${f.fileCount} files` : ''} · ${fmtBytes(f.sizeBytes ?? f.bytes?.byteLength)} · ${f.format}`, ms: performance.now() - t0 });
       if (seq !== state.loadSeq) return endRun(run, true);
       await duckP;
-      await loadInput({ bytes: f.bytes, parts: f.parts, format: f.format, fileName: f.fileName }, { source: f.source, sizeBytes: f.sizeBytes ?? f.bytes?.byteLength, fileCount: f.fileCount }, run, seq);
+      await loadInput({ bytes: f.bytes, parts: f.parts, format: f.format, fileName: f.fileName }, { source: f.source, sizeBytes: f.sizeBytes ?? f.bytes?.byteLength, fileCount: f.fileCount, link }, run, seq);
       };
       try { await go(null); } catch (e) {
         // the server blocks browsers: if the user set up a relay of their own, read this one link through it
@@ -1144,7 +1149,7 @@ export function mountApp(root, deps) {
     const { profile, tableName } = await state.pipeline.load(input, run.trace);
     if (seq !== state.loadSeq) return endRun(run, true);
     state.pipelineHasData = true;
-    state.dataset = { profile, tableName: tableName || profile?.table, source: meta.source, fileName: input.fileName, fileCount: meta.fileCount, sizeBytes: meta.sizeBytes, input };
+    state.dataset = { profile, tableName: tableName || profile?.table, source: meta.source, link: meta.link || (meta.source ? sourceUrlFor(meta.source) : ''), fileName: input.fileName, fileCount: meta.fileCount, sizeBytes: meta.sizeBytes, input };
     state.cards = [];
     setStatus('');
     endRun(run, true);
@@ -1155,15 +1160,9 @@ export function mountApp(root, deps) {
     if (tab !== 'charts') setView(tab);
     renderModeChip();
     updateShare();
-    if (meta.source?.owner) {
-      urlInput.value = githubUrlFor(meta.source);
-      try { history.replaceState(null, '', location.pathname + hashFor(meta.source)); } catch { /* ignore */ }
-    } else if (meta.source?.url) {
-      urlInput.value = meta.source.url;
-      try { history.replaceState(null, '', `${location.pathname}?url=${encodeURIComponent(meta.source.url)}`); } catch { /* ignore */ }
-    } else {
-      try { history.replaceState(null, '', location.pathname); } catch { /* ignore */ }
-    }
+    const link = state.dataset.link;
+    if (link) urlInput.value = link;
+    try { history.replaceState(null, '', link ? linkPath(HERE.base, link) : HERE.base); } catch { /* ignore */ }
     document.title = `${input.fileName} · DataDrop`;
     await suggest(seq);
   }
@@ -1209,9 +1208,9 @@ export function mountApp(root, deps) {
   }
   function shareUrl() {
     const src = state.dataset?.source;
-    return src?.owner ? githubUrlFor(src) : src?.url || null;
+    return state.dataset?.link || (src?.owner ? githubUrlFor(src) : src?.url) || null;
   }
-  const currentShare = () => buildShareLink({ origin: location.origin, pathname: location.pathname, url: shareUrl(), view: state.mode, tab: state.view });
+  const currentShare = () => buildShareLink({ origin: location.origin, base: HERE.base, url: shareUrl(), view: state.mode, tab: state.view });
   function updateShare() {
     const ok = !!state.dataset && !!currentShare();
     shareBtn.disabled = !ok;
@@ -1567,11 +1566,11 @@ export function mountApp(root, deps) {
   // ---------- routing ----------
   window.addEventListener('hashchange', () => {
     const u = hashUrl();
-    if (u && githubUrlFor(state.dataset?.source) !== `https://github.com/${u}`) { urlInput.value = `https://github.com/${u}`; loadUrl(u); }
+    if (u && state.dataset?.link !== `https://github.com/${u}`) { urlInput.value = `https://github.com/${u}`; loadUrl(u); }
   });
 
   // ---------- boot ----------
-  const share = parseShare(location.search); // a shared link's view and tab apply to this visit only; they are not saved
+  const share = parseShare(HERE.link ? location.hash : location.search); // a shared link's view and tab apply to this visit only; they are not saved
   state.mode = share.view || state.prefs.mode;
   state.pendingTab = share.tab || null;
   rebuildPipeline();

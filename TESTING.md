@@ -70,7 +70,7 @@ Keep this table current: a new feature adds a row, and a changed feature updates
 | Heuristic chart quality (log bins, density, top 9 + Other, no-trend note, near-constant numbers) | `histogram uses log bins…`, `top-N bar…`, `time trend…`, `near-constant number…` | `cards: pin, log x, remove` | | |
 | Schema polish (mostly-null tags, grouping over 20 columns) | | `mostly-null columns…` (grouping: not yet) | | |
 | Settings (provider/key/model, storage, gitviz → DataDrop migration) | | `settings drawer…`, `pre-rename settings migrate` | | |
-| Sharing (`#/owner/repo/blob/…`, `?url=`) | | `hash updated…`, `?url= autoloads…` | | hash after load |
+| Sharing (`/<app>/<link as pasted>`, older `#/owner/repo/blob/…` and `?url=`) | `modes.test.mjs` `linkFromLocation`, `buildShareLink` | `address is the app, then the data link`, `a pasted link is kept as pasted…`, `?url= autoloads…` | | address after load |
 | Branding / copy | | `DataDrop branding` | | |
 | Responsive + dark theme | | `400px * no horizontal scroll`, `activity slide-over opens and closes`, `dark: themed axis labels`, `phone: topbar is logo + link + File…`, `Data tab … phone` | | |
 

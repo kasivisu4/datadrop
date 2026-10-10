@@ -112,7 +112,7 @@ export class Duck {
   }
 
   static async create({ baseUrl = './duckdb/' } = {}) {
-    const base = new URL(baseUrl.endsWith('/') ? baseUrl : baseUrl + '/', globalThis.location?.href).href;
+    const base = new URL(baseUrl.endsWith('/') ? baseUrl : baseUrl + '/', globalThis.document?.baseURI || globalThis.location?.href).href;
     const bundles = {
       mvp: { mainModule: base + 'duckdb-mvp.wasm', mainWorker: base + 'duckdb-browser-mvp.worker.js' },
       eh: { mainModule: base + 'duckdb-eh.wasm', mainWorker: base + 'duckdb-browser-eh.worker.js' },

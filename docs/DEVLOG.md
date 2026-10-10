@@ -2,6 +2,13 @@
 
 What changed, why, and how it was verified. Newest first. The format is in [AGENTS.md](../AGENTS.md#devlog-entry-format).
 
+## 2026-10-09: The address is the app, a slash, then the data link as pasted
+- **Why:** the user pasted a raw.githubusercontent.com link and the box and address turned it into `github.com/…/blob/…` and `#/owner/repo/blob/…`. They want the link kept as pasted, in a friendly form: `https://kasivisu4.github.io/datadrop/<the link>`.
+- **Changed:** `src/data/modes.js`: `linkFromLocation` (app folder + link from the path; the link's own `?query` belongs to it; `#` travels as `%23`; a squashed `//` is repaired), `linkPath`, `buildShareLink` now builds `<origin><app>/<link>#view=…&tab=…`, `parseShare` reads a hash too. `src/ui/app.js`: the box, the address and Share use the link as pasted (`state.dataset.link`); a boot from the path reads view/tab from the hash; `?url=` and `#/owner/repo/blob/…` still open and are rewritten to the new form. `public/index.html`: an inline script sets `<base>` to the app's folder so `./app.js`, `./duckdb/` resolve under any link; `src/data/duck.js` and the DuckDB URL in app.js resolve against `document.baseURI`. `build.mjs` also writes `404.html` (GitHub Pages serves it for `/datadrop/https://…`); `serve.mjs` serves the app for such paths.
+- **Tests:** unit `linkFromLocation`, `buildShareLink` round trips (spaces, a Sheets `#gid`, a `?dl=1` query), `parseShare` from a hash; tier 2 `address is the app, then the data link`, share link exact string, `a pasted link is kept as pasted… older ?url= addresses still open`; tier 4 asserts the address path. `check:full` ✅ except two tier-2 checks that flaked under the parallel run and pass alone (`npm run test:ui` ✅).
+- **Verified:** local server: `localhost:5173/https://raw.githubusercontent.com/BuzzFeedNews/…/refs/heads/master/data/nics-firearm-background-checks.csv` opens, box shows the raw link, 16,445 rows, 4 charts; the old `#/BuzzFeedNews/…` address loads and becomes `/https://github.com/…`.
+- **Open:** on GitHub Pages a link-in-path address is answered with HTTP 404 (body is the app), harmless for browsers but link-preview bots may skip it.
+
 ## 2026-10-09: A deploy is picked up as a whole (versioned app.js / styles.css)
 - **Why:** after the Review fix was deployed the user still saw blank charts on the live site: GitHub Pages serves every file with `max-age=600`, so a browser can keep running the old `app.js` for up to 10 minutes, or mix a new page with an old script.
 - **Changed:** `build.mjs` writes `index.html` with `app.js?v=<hash>` and `styles.css?v=<hash>` (sha256 of the built file).

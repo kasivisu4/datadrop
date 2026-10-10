@@ -49,6 +49,9 @@ http.createServer(async (req, res) => {
     if (!file.startsWith(dir)) { res.writeHead(403).end('forbidden'); return; }
     let s = await stat(file).catch(() => null);
     if (s?.isDirectory()) { file = path.join(file, 'index.html'); s = await stat(file).catch(() => null); }
+    if (!s && /\/(https?|s3|gs|hf):\//i.test(p)) { // a data link in the address: the app, as GitHub Pages does with 404.html
+      file = path.join(dir, 'index.html'); s = await stat(file).catch(() => null);
+    }
     if (!s) { res.writeHead(404, { 'content-type': 'text/plain' }).end('not found'); return; }
     res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream', 'content-length': s.size, 'cache-control': 'no-cache' });
     createReadStream(file).pipe(res);

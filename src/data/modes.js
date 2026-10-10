@@ -42,20 +42,41 @@ export function savePrefs(storage, prefs) {
   try { storage.setItem(KEY, JSON.stringify({ mode: prefs.mode, dismissed: prefs.dismissed || {} })); return true; } catch { return false; }
 }
 
-/** { url, view, tab } from a query string; each only when valid. */
+/** { url, view, tab } from a query string (?url=…&view=…) or a hash (#view=…&tab=…); each only when valid. */
 export function parseShare(search) {
-  const p = new URLSearchParams(String(search || '').replace(/^\?/, ''));
+  const p = new URLSearchParams(String(search || '').replace(/^[?#]/, ''));
   const url = p.get('url') || undefined;
   const view = p.get('view');
   const tab = p.get('tab');
   return { url, view: isMode(view) ? view : undefined, tab: TABS.includes(tab) ? tab : undefined };
 }
 
+const SHAREABLE = /^(https?|s3|gs|hf):\/\//i;
+const LINK_IN_PATH = /^(.*?\/)((?:https?|s3|gs|hf):\/.*)$/i;
+
+/**
+ * The app's folder and the data link written after it: /datadrop/https://host/a.csv?dl=1 ->
+ * { base: '/datadrop/', link: 'https://host/a.csv?dl=1' }. The link's own query is part of it; a '#' in the link
+ * travels as %23 (the address's own hash carries the view). Some servers squash '//' to '/': put it back.
+ */
+export function linkFromLocation({ pathname = '/', search = '' } = {}) {
+  const m = String(pathname).match(LINK_IN_PATH);
+  if (!m) return { base: String(pathname).replace(/[^/]*$/, '') || '/', link: '' };
+  const link = (m[2] + search).replace(/^([a-z0-9]+):\/(?!\/)/i, '$1://').replace(/%23/gi, '#');
+  return { base: m[1], link };
+}
+
+/** The address path for a data link: the app's folder, then the link as pasted (only '#' and spaces escaped). */
+export function linkPath(base, link) {
+  return base + String(link).replace(/#/g, '%23').replace(/ /g, '%20');
+}
+
 /** A link that reopens this dataset in this view. null when there is no public URL to point at (a local file). */
-export function buildShareLink({ origin, pathname, url, view, tab }) {
-  if (!url || !/^(https?|s3|gs|hf):\/\//i.test(url)) return null;
-  const q = new URLSearchParams({ url });
+export function buildShareLink({ origin, base, url, view, tab }) {
+  if (!url || !SHAREABLE.test(url)) return null;
+  const q = new URLSearchParams();
   if (isMode(view)) q.set('view', view);
   if (TABS.includes(tab) && tab !== MODES[view]?.tab) q.set('tab', tab);
-  return `${origin}${pathname}?${q.toString()}`;
+  const hash = q.toString();
+  return `${origin}${linkPath(base, url)}${hash ? `#${hash}` : ''}`;
 }

@@ -98,8 +98,8 @@ try {
     const n = await page.locator('.card', { hasText: 'Closing price over time' }).locator('.role-axis[aria-label^="X-axis"] .role-axis-label text').count();
     assert.ok(n >= 3 && n <= 8, `${n} x labels`);
   });
-  await check('hash updated for sharing', async () => {
-    assert.equal(new URL(page.url()).hash, '#/plotly/datasets/blob/master/2014_apple_stock.csv');
+  await check('address is the app, then the data link', async () => {
+    assert.equal(new URL(page.url()).pathname, '/https://github.com/plotly/datasets/blob/master/2014_apple_stock.csv');
   });
   await check('dataset panel', async () => {
     assert.ok(!/(^|\n)null(\n|$)/.test(await page.locator('.dataset-body').innerText()), 'no stray "null" text');
@@ -1058,14 +1058,26 @@ try {
     await page.getByRole('button', { name: 'Share' }).click();
     await page.getByRole('button', { name: 'Link copied' }).waitFor();
     const link = await page.evaluate(() => navigator.clipboard.readText());
-    const u = new URL(link);
-    assert.equal(u.searchParams.get('url'), 'https://github.com/plotly/datasets/blob/master/2014_apple_stock.csv');
-    assert.equal(u.searchParams.get('view'), 'explore');
-    assert.equal(u.searchParams.get('tab'), 'sql');
+    assert.equal(link, BASE + 'https://github.com/plotly/datasets/blob/master/2014_apple_stock.csv#view=explore&tab=sql');
     await page.goto(link);
     await page.waitForFunction(() => document.querySelector('.view-tab[data-view=sql]')?.getAttribute('aria-selected') === 'true');
     assert.equal(await page.locator('.view-select').inputValue(), 'explore');
     assert.match(await page.locator('.databar .ds-name').textContent(), /2014_apple_stock\.csv/);
+  });
+  await check('a pasted link is kept as pasted: in the box, the address and after a reload; older ?url= addresses still open', async () => {
+    const raw = 'https://raw.githubusercontent.com/plotly/datasets/refs/heads/master/2014_apple_stock.csv';
+    await page.goto(BASE);
+    await page.locator('#gv-url').fill(raw);
+    await page.locator('#gv-url').press('Enter');
+    await page.locator('.card .vega-embed svg').first().waitFor({ timeout: 10000 });
+    assert.equal(await page.locator('#gv-url').inputValue(), raw);
+    assert.equal(page.url(), BASE + raw);
+    await page.reload();
+    await page.locator('.card .vega-embed svg').first().waitFor({ timeout: 10000 });
+    assert.equal(await page.locator('#gv-url').inputValue(), raw, 'reopened from the address');
+    await page.goto(BASE + '?url=' + encodeURIComponent(raw));
+    await page.locator('.card .vega-embed svg').first().waitFor({ timeout: 10000 });
+    assert.equal(page.url(), BASE + raw, 'an old ?url= address becomes the new form');
   });
   await page.context().close();
 

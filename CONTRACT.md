@@ -198,7 +198,7 @@ histogram of first quantitative. So the app is useful with zero setup.
   visible). A failed card says "This chart couldn't be built from this data." with "Show technical details" (raw
   message + SQL) behind a `<details>`.
 - **Settings drawer** (provider, API key, model, base URL, show agent steps, large files; `localStorage` in try/catch).
-  Drag-and-drop / file input load a local file. The initial URL comes from `?url=` or `#/owner/repo/blob/...`.
+  Drag-and-drop / file input load a local file. The initial URL comes from the path after the app's folder (`/<app>/https://…`, see `linkFromLocation` in `src/data/modes.js`; GitHub Pages serves it through `404.html`, and `index.html` sets `<base>` to the app's folder), else `?url=` or `#/owner/repo/blob/...`. After a load the address becomes `/<app>/<the link as pasted>`.
 
 ### ui/chartstyle.js, ui/csv.js, ui/popover.js  (no app state; the first two are pure)
 ```js

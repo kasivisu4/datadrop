@@ -57,6 +57,8 @@ async function main() {
     .replace('"./app.js"', `"./app.js?v=${stamp('app.js')}"`)
     .replace('"./styles.css"', `"./styles.css?v=${stamp('styles.css')}"`);
   await writeFile(path.join(outdir, 'index.html'), html);
+  // GitHub Pages answers unknown paths with 404.html: that is how …/datadrop/https://host/file.csv opens the app
+  await writeFile(path.join(outdir, '404.html'), html);
 
   const duck = nm('@duckdb/duckdb-wasm/dist');
   for (const f of ['duckdb-eh.wasm', 'duckdb-mvp.wasm', 'duckdb-browser-eh.worker.js', 'duckdb-browser-mvp.worker.js']) {

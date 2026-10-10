@@ -2,6 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <script>
+    // The address can carry a data link after the app's folder (…/datadrop/https://host/file.csv); GitHub Pages answers
+    // those with this page as 404.html. Resolve ./app.js, ./duckdb/ etc. against the app's folder, never the link.
+    (function () {
+      var p = location.pathname, m = p.match(/^(.*?\/)(?:https?|s3|gs|hf):\//i);
+      var b = document.createElement('base');
+      b.href = m ? m[1] : p.replace(/[^/]*$/, '');
+      document.head.appendChild(b);
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DataDrop</title>
   <meta name="description" content="Paste any public data URL and get an interactive dashboard. DuckDB-WASM and AI agents, all in your browser.">

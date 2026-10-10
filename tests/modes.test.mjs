@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MODES, DEFAULT_MODE, isMode, suggestMode, loadPrefs, savePrefs, parseShare, buildShareLink } from '../src/data/modes.js';
+import { MODES, DEFAULT_MODE, isMode, suggestMode, loadPrefs, savePrefs, parseShare, buildShareLink, linkFromLocation } from '../src/data/modes.js';
 
 const col = (name, type, kind, extra = {}) => ({ name, type, kind, ...extra });
 const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, v) }; };
@@ -50,17 +50,33 @@ test('parseShare: only valid view and tab values survive', () => {
   assert.deepEqual(parseShare('?url=a&view=evil&tab=<script>'), { url: 'a', view: undefined, tab: undefined });
   assert.deepEqual(parseShare(''), { url: undefined, view: undefined, tab: undefined });
   assert.equal(parseShare('view=explore').view, 'explore');
+  assert.deepEqual(parseShare('#view=review&tab=sql'), { url: undefined, view: 'review', tab: 'sql' }, 'from the hash of a link-in-path address');
 });
 
-test('buildShareLink: dataset + view (+ tab only when it differs from the view\'s own); never for local files', () => {
-  const base = { origin: 'https://datadrop.example', pathname: '/app/', url: 'https://x.org/a b.csv' };
-  assert.equal(buildShareLink({ ...base, view: 'review', tab: 'data' }), 'https://datadrop.example/app/?url=https%3A%2F%2Fx.org%2Fa+b.csv&view=review');
-  assert.equal(buildShareLink({ ...base, view: 'review', tab: 'sql' }), 'https://datadrop.example/app/?url=https%3A%2F%2Fx.org%2Fa+b.csv&view=review&tab=sql');
-  assert.equal(buildShareLink({ ...base, view: 'overview', tab: 'charts' }), 'https://datadrop.example/app/?url=https%3A%2F%2Fx.org%2Fa+b.csv&view=overview');
-  assert.equal(buildShareLink({ ...base, url: 's3://b/k.parquet', view: 'explore' }).includes('s3%3A%2F%2Fb%2Fk.parquet'), true);
+test('buildShareLink: the app folder, then the link as pasted; view (+ tab only when it differs from the view own tab) in the hash; never for local files', () => {
+  const base = { origin: 'https://datadrop.example', base: '/app/', url: 'https://x.org/a b.csv' };
+  assert.equal(buildShareLink({ ...base, view: 'review', tab: 'data' }), 'https://datadrop.example/app/https://x.org/a%20b.csv#view=review');
+  assert.equal(buildShareLink({ ...base, view: 'review', tab: 'sql' }), 'https://datadrop.example/app/https://x.org/a%20b.csv#view=review&tab=sql');
+  assert.equal(buildShareLink({ ...base, view: undefined, tab: 'charts' }), 'https://datadrop.example/app/https://x.org/a%20b.csv#tab=charts');
+  assert.equal(buildShareLink({ ...base, url: 's3://b/k.parquet', view: 'explore' }), 'https://datadrop.example/app/s3://b/k.parquet#view=explore');
   assert.equal(buildShareLink({ ...base, url: null, view: 'review' }), null, 'a local file has no link');
   assert.equal(buildShareLink({ ...base, url: 'javascript:alert(1)', view: 'review' }), null);
   assert.equal(buildShareLink({ ...base, url: 'file:///c/x.csv' }), null);
-  const round = parseShare(new URL(buildShareLink({ ...base, view: 'explore', tab: 'sql' })).search);
-  assert.deepEqual(round, { url: base.url, view: 'explore', tab: 'sql' }, 'what we build, we can read');
+  const sheet = 'https://docs.google.com/spreadsheets/d/abc/edit?usp=sharing#gid=7';
+  for (const url of [base.url.replace(' ', '%20'), sheet, 'https://x.org/a.csv?dl=1&raw=true']) {
+    const u = new URL(buildShareLink({ ...base, url, view: 'explore', tab: 'sql' }));
+    assert.deepEqual(linkFromLocation(u), { base: '/app/', link: url }, 'what we build, we can read: ' + url);
+    assert.deepEqual(parseShare(u.hash), { url: undefined, view: 'explore', tab: 'sql' });
+  }
+});
+
+test('linkFromLocation: the data link after the app folder; older addresses have none', () => {
+  assert.deepEqual(linkFromLocation({ pathname: '/datadrop/https://raw.githubusercontent.com/o/r/refs/heads/master/d/a.csv', search: '' }),
+    { base: '/datadrop/', link: 'https://raw.githubusercontent.com/o/r/refs/heads/master/d/a.csv' });
+  assert.deepEqual(linkFromLocation({ pathname: '/https://x.org/a.csv', search: '?dl=1' }), { base: '/', link: 'https://x.org/a.csv?dl=1' }, 'the own query of the link is part of it');
+  assert.equal(linkFromLocation({ pathname: '/datadrop/https:/x.org/a.csv' }).link, 'https://x.org/a.csv', 'a squashed // is put back');
+  assert.equal(linkFromLocation({ pathname: '/app/hf://datasets/o/d/x.parquet' }).link, 'hf://datasets/o/d/x.parquet');
+  assert.deepEqual(linkFromLocation({ pathname: '/datadrop/', search: '?url=x' }), { base: '/datadrop/', link: '' });
+  assert.deepEqual(linkFromLocation({ pathname: '/datadrop/index.html' }), { base: '/datadrop/', link: '' });
+  assert.deepEqual(linkFromLocation({ pathname: '/' }), { base: '/', link: '' });
 });

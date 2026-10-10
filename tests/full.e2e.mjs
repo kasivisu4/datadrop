@@ -94,7 +94,7 @@ try {
     const info = await page.evaluate(() => ({
       cards: [...document.querySelectorAll('.card')].map((c) => ({ title: c.querySelector('h3,h2,.card-title')?.textContent?.trim(), svg: !!c.querySelector('svg'), err: /error|couldn/i.test(c.className + ' ' + (c.querySelector('.card-error,.error')?.textContent || '')) })),
       trace: [...document.querySelectorAll('[class*="trace"] li, .trace-item, .trace-event')].map((li) => li.textContent.replace(/\s+/g, ' ').trim()).slice(0, 40),
-      hash: location.hash,
+      path: location.pathname,
       hscroll: document.scrollingElement.scrollWidth > innerWidth,
     }));
     await mkdir(join(here, 'screens'), { recursive: true });
@@ -108,7 +108,7 @@ try {
   assert.ok(r.cards.filter((c) => c.svg).length >= 3, 'three rendered charts');
   assert.ok(r.trace.some((t) => /repair/i.test(t)), 'repair visible in trace');
   assert.deepEqual(r.errors, []);
-  assert.ok(r.hash.startsWith('#/plotly/datasets/blob/master/'));
+  assert.equal(r.path, '/https://github.com/plotly/datasets/blob/master/2014_apple_stock.csv', 'the address is the app, then the link');
   console.log('FULL E2E PASSED');
 } finally {
   await browser.close();

@@ -50,7 +50,7 @@ There is no backend. Your API key is kept in this browser's localStorage and sen
   value of that row as a readable list, with prev/next, find, hide empty values, click a value to copy, Copy JSON.
   Click a column in the columns list to jump to it. On a big remote file the grid reads only the visible columns, a page
   at a time (working-set columns appear instantly, the rest fill in as they download).
-- Share links: `/#/owner/repo/blob/<ref>/<path>` or `/?url=<any data url>`. The hash updates after each load.
+- Share links: the app's address, a slash, then the data link exactly as pasted, e.g. `https://kasivisu4.github.io/datadrop/https://raw.githubusercontent.com/o/r/refs/heads/main/data.csv`. The address updates after each load; a shared view/tab rides in the hash (`#view=review&tab=sql`). Older `/?url=<link>` and `/#/owner/repo/blob/<ref>/<path>` addresses still open.
 - **Settings**: provider (Anthropic, any OpenAI-compatible endpoint, or None), API key, model, base URL.
 
 ## Develop
